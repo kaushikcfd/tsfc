@@ -31,6 +31,20 @@ def tabulate(ufl_element, order):
         yield c, D, table
 
 
+def rounding(expr):
+    from tsfc.fem import epsilon as eps
+
+    if isinstance(expr, (float, sympy.numbers.Float)):
+        v = float(expr)
+        if abs(v - round(v, 1)) < eps:
+            return round(v, 1)
+    elif isinstance(expr, sympy.Expr):
+        if expr.args:
+            return expr.func(*map(rounding, expr.args))
+
+    return expr
+
+
 class TabulationManager(object):
 
     def __init__(self):
@@ -45,6 +59,8 @@ class TabulationManager(object):
         """
         for c, D, table in tabulate(ufl_element, max_deriv):
             assert len(table.shape) == 1
+            for i in range(len(table)):
+                table[i] = rounding(table[i])
             self.evaluate_basis[(ufl_element, c, D)] = table
 
     def __getitem__(self, key):
@@ -154,11 +170,13 @@ def sympy2gem_pow(node, self):
 
 
 @sympy2gem.register(sympy.Integer)
+@sympy2gem.register(int)
 def sympy2gem_integer(node, self):
     return gem.Literal(int(node))
 
 
 @sympy2gem.register(sympy.Float)
+@sympy2gem.register(float)
 def sympy2gem_float(node, self):
     return gem.Literal(float(node))
 
