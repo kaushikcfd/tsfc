@@ -208,9 +208,15 @@ def _expression_power(expr, parameters):
 
 @_expression.register(gem.MathFunction)
 def _expression_mathfunction(expr, parameters):
-    name_map = {'abs': 'fabs', 'ln': 'log'}
+    name_map = {'abs': 'fabs', 'ln': 'log', 'cyl_bessel_j': 'jn'}
     name = name_map.get(expr.name, expr.name)
-    return coffee.FunCall(name, expression(expr.children[0], parameters))
+    if name == 'jn':
+        nu, arg = expr.children
+        if nu == gem.Literal(0):
+            return coffee.FunCall('j0', expression(arg, parameters))
+        elif nu == gem.Literal(1):
+            return coffee.FunCall('j1', expression(arg, parameters))
+    return coffee.FunCall(name, *[expression(c, parameters) for c in expr.children])
 
 
 @_expression.register(gem.MinValue)

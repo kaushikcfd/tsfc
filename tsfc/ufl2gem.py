@@ -60,6 +60,9 @@ class Mixin(object):
     def math_function(self, o, expr):
         return MathFunction(o._name, expr)
 
+    def bessel_j(self, o, nu, arg):
+        return MathFunction(o._name, nu, arg)
+
     def min_value(self, o, *ops):
         return MinValue(*ops)
 
