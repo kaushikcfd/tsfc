@@ -85,12 +85,14 @@ def as_fiat_cell(cell):
 
 
 @singledispatch
-def convert(element, vector_is_mixed):
+def convert(element, vector_is_mixed, patch_quads):
     """Handler for converting UFL elements to FIAT elements.
 
     :arg element: The UFL element to convert.
     :arg vector_is_mixed: Should Vector and Tensor elements be treated
         as Mixed?  If ``False``, then just look at the sub-element.
+    :arg patch_quads: Should tensor product elements on quadrilateral
+        cells have their entity_ids and reference_element "fixed"?
 
     Do not use this function directly, instead call
     :func:`create_element`."""
@@ -100,12 +102,12 @@ def convert(element, vector_is_mixed):
 
 
 # Base finite elements first
-@convert.register(ufl.FiniteElement)  # noqa
-def _(element, vector_is_mixed):
+@convert.register(ufl.FiniteElement)
+def convert_finitelement(element, vector_is_mixed, patch_quads):
     if element.family() == "Real":
         # Real element is just DG0
         cell = element.cell()
-        return create_element(ufl.FiniteElement("DG", cell, 0), vector_is_mixed)
+        return create_element(ufl.FiniteElement("DG", cell, 0), vector_is_mixed, patch_quads)
     cell = as_fiat_cell(element.cell())
     lmbda = supported_elements[element.family()]
     if lmbda is None:
@@ -119,84 +121,86 @@ def _(element, vector_is_mixed):
                                       element.degree())
         # Can't use create_element here because we're going to modify
         # it, so if we pull it from the cache, that's bad.
-        element = convert(element, vector_is_mixed)
-        # Splat quadrilateral elements that are on TFEs back into
-        # something with the correct entity dofs.
-        nodes = element.dual.nodes
-        ref_el = FiredrakeQuadrilateral()
+        element = convert(element, vector_is_mixed, patch_quads)
+        if patch_quads:
+            # Splat quadrilateral elements that are on TPCs back into
+            # something with the correct entity dofs.
+            nodes = element.dual.nodes
+            ref_el = FiredrakeQuadrilateral()
 
-        entity_ids = element.dual.entity_ids
-        flat_entity_ids = {}
-        flat_entity_ids[0] = entity_ids[(0, 0)]
-        flat_entity_ids[1] = dict(enumerate(entity_ids[(0, 1)].values() +
-                                            entity_ids[(1, 0)].values()))
-        flat_entity_ids[2] = entity_ids[(1, 1)]
+            entity_ids = element.dual.entity_ids
+            flat_entity_ids = {}
+            flat_entity_ids[0] = entity_ids[(0, 0)]
+            flat_entity_ids[1] = dict(enumerate(entity_ids[(0, 1)].values() +
+                                                entity_ids[(1, 0)].values()))
+            flat_entity_ids[2] = entity_ids[(1, 1)]
 
-        element.dual = DualSet(nodes, ref_el, flat_entity_ids)
-        element.ref_el = ref_el
+            element.dual = DualSet(nodes, ref_el, flat_entity_ids)
+            element.ref_el = ref_el
         return element
     return lmbda(cell, element.degree())
 
 
 # Element modifiers
-@convert.register(ufl.FacetElement)  # noqa
-def _(element, vector_is_mixed):
-    return FIAT.RestrictedElement(create_element(element._element, vector_is_mixed),
+@convert.register(ufl.FacetElement)
+def convert_facetelement(element, vector_is_mixed, patch_quads):
+    return FIAT.RestrictedElement(create_element(element._element, vector_is_mixed, patch_quads),
                                   restriction_domain="facet")
 
 
-@convert.register(ufl.InteriorElement)  # noqa
-def _(element, vector_is_mixed):
-    return FIAT.RestrictedElement(create_element(element._element, vector_is_mixed),
+@convert.register(ufl.InteriorElement)
+def convert_interiorelement(element, vector_is_mixed, patch_quads):
+    return FIAT.RestrictedElement(create_element(element._element, vector_is_mixed, patch_quads),
                                   restriction_domain="interior")
 
 
-@convert.register(ufl.EnrichedElement)  # noqa
-def _(element, vector_is_mixed):
+@convert.register(ufl.EnrichedElement)
+def convert_enrichedelement(element, vector_is_mixed, patch_quads):
     if len(element._elements) != 2:
         raise ValueError("Enriched elements with more than two components not handled")
     A, B = element._elements
-    return FIAT.EnrichedElement(create_element(A, vector_is_mixed),
-                                create_element(B, vector_is_mixed))
+    return FIAT.EnrichedElement(create_element(A, vector_is_mixed, patch_quads),
+                                create_element(B, vector_is_mixed, patch_quads))
 
 
-@convert.register(ufl.TraceElement)  # noqa
+@convert.register(ufl.TraceElement)
 @convert.register(ufl.BrokenElement)
-def _(element, vector_is_mixed):
+def convert_brokenelement(element, vector_is_mixed, patch_quads):
     return supported_elements[element.family()](create_element(element._element,
-                                                               vector_is_mixed))
+                                                               vector_is_mixed,
+                                                               patch_quads))
 
 
 # Now for the OPE-specific stuff
-@convert.register(ufl.TensorProductElement)  # noqa
-def _(element, vector_is_mixed):
+@convert.register(ufl.TensorProductElement)
+def convert_tensorproductelement(element, vector_is_mixed, patch_quads):
     cell = element.cell()
     if type(cell) is not ufl.TensorProductCell:
         raise ValueError("OPE not on OPC?")
     A = element._A
     B = element._B
-    return FIAT.TensorProductElement(create_element(A, vector_is_mixed),
-                                     create_element(B, vector_is_mixed))
+    return FIAT.TensorProductElement(create_element(A, vector_is_mixed, patch_quads),
+                                     create_element(B, vector_is_mixed, patch_quads))
 
 
-@convert.register(ufl.HDivElement)  # noqa
-def _(element, vector_is_mixed):
-    return FIAT.Hdiv(create_element(element._element, vector_is_mixed))
+@convert.register(ufl.HDivElement)
+def convert_hdivelement(element, vector_is_mixed, patch_quads):
+    return FIAT.Hdiv(create_element(element._element, vector_is_mixed, patch_quads))
 
 
-@convert.register(ufl.HCurlElement)  # noqa
-def _(element, vector_is_mixed):
-    return FIAT.Hcurl(create_element(element._element, vector_is_mixed))
+@convert.register(ufl.HCurlElement)
+def convert_hcurlelement(element, vector_is_mixed, patch_quads):
+    return FIAT.Hcurl(create_element(element._element, vector_is_mixed, patch_quads))
 
 
 # Finally the MixedElement case
-@convert.register(ufl.MixedElement)  # noqa
-def _(element, vector_is_mixed):
+@convert.register(ufl.MixedElement)
+def convert_mixedelement(element, vector_is_mixed, patch_quads):
     # If we're just trying to get the scalar part of a vector element?
     if not vector_is_mixed:
         assert isinstance(element, (ufl.VectorElement,
                                     ufl.TensorElement))
-        return create_element(element.sub_elements()[0], vector_is_mixed)
+        return create_element(element.sub_elements()[0], vector_is_mixed, patch_quads)
 
     elements = []
 
@@ -217,7 +221,7 @@ quad_opc = ufl.TensorProductCell(ufl.Cell("interval"), ufl.Cell("interval"))
 _cache = weakref.WeakKeyDictionary()
 
 
-def create_element(element, vector_is_mixed=True):
+def create_element(element, vector_is_mixed=True, patch_quads=False):
     """Create a FIAT element (suitable for tabulating with) given a UFL element.
 
     :arg element: The UFL element to create a FIAT element from.
@@ -226,6 +230,8 @@ def create_element(element, vector_is_mixed=True):
          TensorElement) should be treated as a MixedElement.  Maybe
          useful if you want a FIAT element that tells you how many
          "nodes" the finite element has.
+    :arg patch_quads: patches TensorProductElements on quadrilaterals
+        to pretend that they are not defined on a TensorProductCell.
     """
     try:
         cache = _cache[element]
@@ -234,13 +240,13 @@ def create_element(element, vector_is_mixed=True):
         cache = _cache[element]
 
     try:
-        return cache[vector_is_mixed]
+        return cache[(vector_is_mixed, patch_quads)]
     except KeyError:
         pass
 
     if element.cell() is None:
         raise ValueError("Don't know how to build element when cell is not given")
 
-    fiat_element = convert(element, vector_is_mixed)
-    cache[vector_is_mixed] = fiat_element
+    fiat_element = convert(element, vector_is_mixed, patch_quads)
+    cache[(vector_is_mixed, patch_quads)] = fiat_element
     return fiat_element
