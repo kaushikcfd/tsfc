@@ -30,7 +30,7 @@ __all__ = ['Node', 'Identity', 'Literal', 'Zero', 'Variable', 'Sum',
            'MaxValue', 'Comparison', 'LogicalNot', 'LogicalAnd',
            'LogicalOr', 'Conditional', 'Index', 'VariableIndex',
            'Indexed', 'ComponentTensor', 'IndexSum', 'ListTensor',
-           'partial_indexed']
+           'Failure', 'partial_indexed']
 
 
 class NodeMeta(type):
@@ -131,6 +131,15 @@ class Identity(Constant):
     @property
     def array(self):
         return numpy.eye(self.dim)
+
+
+class Failure(Terminal):
+    __slots__ = ('shape', 'exc_info')
+    __front__ = ('shape', 'exc_info')
+
+    def __init__(self, shape, exc_info):
+        self.shape = shape
+        self.exc_info = exc_info
 
 
 class Literal(Constant):
