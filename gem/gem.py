@@ -90,6 +90,17 @@ class Scalar(Node):
     shape = ()
 
 
+class Failure(Terminal):
+    """Abstract class for failure GEM nodes."""
+
+    __slots__ = ('shape', 'exc_info')
+    __front__ = ('shape', 'exc_info')
+
+    def __init__(self, shape, exc_info):
+        self.shape = shape
+        self.exc_info = exc_info
+
+
 class Constant(Terminal):
     """Abstract base class for constant types.
 

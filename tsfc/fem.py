@@ -8,10 +8,9 @@ from singledispatch import singledispatch
 
 from ufl.corealg.map_dag import map_expr_dag, map_expr_dags
 from ufl.corealg.multifunction import MultiFunction
-from ufl.classes import (Argument, Coefficient, CellVolume,
-                         ConstantValue, FacetArea, FormArgument,
-                         GeometricQuantity, QuadratureWeight)
-
+from ufl.classes import (Argument, Coefficient, CellVolume, ConstantValue,
+                         FacetArea, FormArgument, GeometricQuantity,
+                         QuadratureWeight)
 import gem
 
 from tsfc.constants import PRECISION
@@ -24,13 +23,13 @@ from tsfc import geometric
 from tsfc.ufl_utils import (CollectModifiedTerminals,
                             ModifiedTerminalMixin, PickRestriction,
                             spanning_degree, simplify_abs)
-
+from FIAT.hdiv_trace import TraceError
 
 # FFC uses one less digits for rounding than for printing
 epsilon = eval("1e-%d" % (PRECISION - 1))
 
 
-def _tabulate(ufl_element, order, points):
+def _tabulate(ufl_element, order, points, entity):
     """Ask FIAT to tabulate ``points`` up to order ``order``, then
     rearranges the result into a series of ``(c, D, table)`` tuples,
     where:
@@ -43,22 +42,35 @@ def _tabulate(ufl_element, order, points):
     :arg ufl_element: element to tabulate
     :arg order: FIAT gives all derivatives up to this order
     :arg points: points to tabulate the element on
+    :arg entity: particular entity to tabulate on
     """
     element = create_element(ufl_element)
     phi = element.space_dimension()
     C = ufl_element.reference_value_size()
     q = len(points)
-    for D, fiat_table in element.tabulate(order, points).iteritems():
-        reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
-        for c, table in enumerate(reordered_table):
-            yield c, D, table
+    try:
+        for D, fiat_table in element.tabulate(order, points).iteritems():
+            reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
+            for c, table in enumerate(reordered_table):
+                yield c, D, table
+    except TraceError as TE:
+        import sys
+        shape = (q, phi)
+        gemTable = gem.Failure(shape, sys.exc_info())
+        for D, fiat_table in TE.zeros.iteritems():
+            reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
+            for c, table in enumerate(reordered_table):
+                yield c, D, gemTable
 
 
-def tabulate(ufl_element, order, points):
+def tabulate(ufl_element, order, points, entity):
     """Same as the above, but also applies FFC rounding and recognises
     cellwise constantness.  Cellwise constantness is determined
     symbolically, but we also check the numerics to be safe."""
     for c, D, table in _tabulate(ufl_element, order, points):
+        if isinstance(table, gem.Failure):
+            yield c, D, table
+
         # Copied from FFC (ffc/quadrature/quadratureutils.py)
         table[abs(table) < epsilon] = 0
         table[abs(table - 1.0) < epsilon] = 1.0
@@ -66,16 +78,16 @@ def tabulate(ufl_element, order, points):
         table[abs(table - 0.5) < epsilon] = 0.5
         table[abs(table + 0.5) < epsilon] = -0.5
 
-        if spanning_degree(ufl_element) <= sum(D):
+        if spanning_degree(ufl_element) <= sum(D) and ufl_element.family() != "HDiv Trace":
             assert compat.allclose(table, table.mean(axis=0, keepdims=True), equal_nan=True)
             table = table[0]
 
         yield c, D, table
 
 
-def make_tabulator(points):
-    """Creates a tabulator for an array of points."""
-    return lambda elem, order: tabulate(elem, order, points)
+def make_tabulator(points, entity):
+    """Creates a tabulator for an array of points for a given entity."""
+    return lambda elem, order: tabulate(elem, order, points, entity)
 
 
 class TabulationManager(object):

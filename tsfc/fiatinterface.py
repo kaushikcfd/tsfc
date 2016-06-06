@@ -58,7 +58,8 @@ supported_elements = {
     "Nedelec 2nd kind H(curl)": FIAT.NedelecSecondKind,
     "TensorProductElement": FIAT.TensorProductElement,
     "Raviart-Thomas": FIAT.RaviartThomas,
-    "TraceElement": FIAT.HDivTrace,
+    "TraceElement": FIAT.TraceHDiv,
+    "HDiv Trace": FIAT.TraceHDiv,
     "Regge": FIAT.Regge,
     # These require special treatment below
     "DQ": None,
