@@ -60,7 +60,7 @@ def _tabulate(ufl_element, order, points, entity):
         for D, fiat_table in TE.zeros.iteritems():
             reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
             for c, table in enumerate(reordered_table):
-                yield c, D, gemTable
+                yield c, D, table
 
 
 def tabulate(ufl_element, order, points, entity):
@@ -70,6 +70,7 @@ def tabulate(ufl_element, order, points, entity):
     for c, D, table in _tabulate(ufl_element, order, points, entity):
         if isinstance(table, gem.Failure):
             yield c, D, table
+            continue
 
         # Copied from FFC (ffc/quadrature/quadratureutils.py)
         table[abs(table) < epsilon] = 0
@@ -165,14 +166,13 @@ class FacetManager(object):
             self.facet = None
 
     def entity_ids(self):
-        """Generator function that transforms points in integration cell TODO
-        coordinates to cell coordinates for each facet.
+        """Generator function that returns the appropriate entity ids.
 
-        :arg points: points in integration cell coordinates
+        :arg self: self
         """
         dim = self.ufl_cell.topological_dimension()
         if self.integral_type == 'cell':
-            yield (dim, 0)
+            yield None
 
         elif self.integral_type in ['exterior_facet', 'interior_facet']:
             for entity in range(self.ufl_cell.num_facets()):
