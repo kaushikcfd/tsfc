@@ -49,7 +49,7 @@ def _tabulate(ufl_element, order, points, entity):
     C = ufl_element.reference_value_size()
     q = len(points)
     try:
-        for D, fiat_table in element.tabulate(order, points).iteritems():
+        for D, fiat_table in element.tabulate(order, points, entity).iteritems():
             reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
             for c, table in enumerate(reordered_table):
                 yield c, D, table
@@ -67,7 +67,7 @@ def tabulate(ufl_element, order, points, entity):
     """Same as the above, but also applies FFC rounding and recognises
     cellwise constantness.  Cellwise constantness is determined
     symbolically, but we also check the numerics to be safe."""
-    for c, D, table in _tabulate(ufl_element, order, points):
+    for c, D, table in _tabulate(ufl_element, order, points, entity):
         if isinstance(table, gem.Failure):
             yield c, D, table
 

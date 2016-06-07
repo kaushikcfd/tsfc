@@ -30,7 +30,7 @@ __all__ = ['Node', 'Identity', 'Literal', 'Zero', 'Variable', 'Sum',
            'MaxValue', 'Comparison', 'LogicalNot', 'LogicalAnd',
            'LogicalOr', 'Conditional', 'Index', 'VariableIndex',
            'Indexed', 'ComponentTensor', 'IndexSum', 'ListTensor',
-           'partial_indexed']
+           'partial_indexed', 'Failure']
 
 
 class NodeMeta(type):
