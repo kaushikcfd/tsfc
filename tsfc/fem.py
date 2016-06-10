@@ -175,13 +175,15 @@ class FacetManager(object):
             yield None
 
         elif self.integral_type in ['exterior_facet', 'interior_facet']:
-            #import ipdb; ipdb.set_trace()
-            quadfacets = [((0, 0), (1, 0)), ((0, 1), (1, 0)), ((1, 0), (0, 0)), ((1, 0), (0, 1))]
             for entity in range(self.ufl_cell.num_facets()):
-                if self.ufl_cell.cellname() == 'quadrilateral':
-                    yield quadfacets[entity]
-                else:
-                    yield (dim-1, entity)
+                yield (dim-1, entity)
+            #import ipdb; ipdb.set_trace()
+        #    quadfacets = [((0, 0), (1, 0)), ((0, 1), (1, 0)), ((1, 0), (0, 0)), ((1, 0), (0, 1))]
+        #    for entity in range(self.ufl_cell.num_facets()):
+        #        if self.ufl_cell.cellname() == 'quadrilateral':
+        #            yield quadfacets[entity]
+        #        else:
+        #           yield (dim-1, entity)
 
         elif self.integral_type in ['exterior_facet_bottom', 'exterior_facet_top', 'interior_facet_horiz']:
             for entity in range(2):  # top and bottom

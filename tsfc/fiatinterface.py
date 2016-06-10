@@ -123,19 +123,30 @@ def _(element, vector_is_mixed):
         element = convert(element, vector_is_mixed)
         # Splat quadrilateral elements that are on TFEs back into
         # something with the correct entity dofs.
-        nodes = element.dual.nodes
-        ref_el = FiredrakeQuadrilateral()
+        def cell_to_quad(element):
+            nodes = element.dual.nodes
+            ref_el = FiredrakeQuadrilateral()
 
-        entity_ids = element.dual.entity_ids
-        flat_entity_ids = {}
-        flat_entity_ids[0] = entity_ids[(0, 0)]
-        flat_entity_ids[1] = dict(enumerate(entity_ids[(0, 1)].values() +
+            entity_ids = element.dual.entity_ids
+            flat_entity_ids = {}
+            flat_entity_ids[0] = entity_ids[(0, 0)]
+            flat_entity_ids[1] = dict(enumerate(entity_ids[(0, 1)].values() +
                                             entity_ids[(1, 0)].values()))
-        flat_entity_ids[2] = entity_ids[(1, 1)]
+            flat_entity_ids[2] = entity_ids[(1, 1)]
 
-        element.dual = DualSet(nodes, ref_el, flat_entity_ids)
-        element.ref_el = ref_el
-        return element
+            element.dual = DualSet(nodes, ref_el, flat_entity_ids)
+            element.ref_el = ref_el
+            return element
+
+        def recurse_cell_to_quad(element):
+            element = cell_to_quad(element)
+            if isinstance(element, FIAT.EnrichedElement):
+                element.A = cell_to_quad(element.A)
+                element.B = cell_to_quad(element.B)
+            return element
+
+
+        return recurse_cell_to_quad(element)
     return lmbda(cell, element.degree())
 
 
