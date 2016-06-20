@@ -48,6 +48,7 @@ def _tabulate(ufl_element, order, points, entity):
     phi = element.space_dimension()
     C = ufl_element.reference_value_size()
     q = len(points)
+
     try:
         for D, fiat_table in element.tabulate(order, points, entity).iteritems():
             reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
@@ -68,9 +69,6 @@ def tabulate(ufl_element, order, points, entity):
     cellwise constantness.  Cellwise constantness is determined
     symbolically, but we also check the numerics to be safe."""
     for c, D, table in _tabulate(ufl_element, order, points, entity):
-        if isinstance(table, gem.Failure):
-            yield c, D, table
-            continue
 
         # Copied from FFC (ffc/quadrature/quadratureutils.py)
         table[abs(table) < epsilon] = 0
@@ -177,13 +175,6 @@ class FacetManager(object):
         elif self.integral_type in ['exterior_facet', 'interior_facet']:
             for entity in range(self.ufl_cell.num_facets()):
                 yield (dim-1, entity)
-            #import ipdb; ipdb.set_trace()
-        #    quadfacets = [((0, 0), (1, 0)), ((0, 1), (1, 0)), ((1, 0), (0, 0)), ((1, 0), (0, 1))]
-        #    for entity in range(self.ufl_cell.num_facets()):
-        #        if self.ufl_cell.cellname() == 'quadrilateral':
-        #            yield quadfacets[entity]
-        #        else:
-        #           yield (dim-1, entity)
 
         elif self.integral_type in ['exterior_facet_bottom', 'exterior_facet_top', 'interior_facet_horiz']:
             for entity in range(2):  # top and bottom

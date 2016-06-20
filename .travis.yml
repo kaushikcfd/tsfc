@@ -22,7 +22,6 @@ before_install:
 
 install:
   - python setup.py install
-  - ${PACKAGE_MANAGER} --package-branch fiat hdiv-trace-implementation --package-branch ufl trace-element-fix
 
 script:
   - py.test tests
