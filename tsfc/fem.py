@@ -163,8 +163,34 @@ class FacetManager(object):
         else:
             self.facet = None
 
+    def facet_transform(self, points):
+        """Generator function that transforms points in integration cell
+        coordinates to cell coordinates for each facet.
+        :arg points: points in integration cell coordinates
+        """
+        if self.integral_type == 'cell':
+            yield points
+
+        elif self.integral_type in ['exterior_facet', 'interior_facet']:
+            for entity in range(self.ufl_cell.num_facets()):
+                t = as_fiat_cell(self.ufl_cell).get_facet_transform(entity)
+                yield numpy.asarray(map(t, points))
+
+        elif self.integral_type in ['exterior_facet_bottom', 'exterior_facet_top', 'interior_facet_horiz']:
+            for entity in range(2):  # top and bottom
+                t = as_fiat_cell(self.ufl_cell).get_horiz_facet_transform(entity)
+                yield numpy.asarray(map(t, points))
+
+        elif self.integral_type in ['exterior_facet_vert', 'interior_facet_vert']:
+            for entity in range(self.ufl_cell.sub_cells()[0].num_facets()):  # "base cell" facets
+                t = as_fiat_cell(self.ufl_cell).get_vert_facet_transform(entity)
+                yield numpy.asarray(map(t, points))
+
+        else:
+            raise NotImplementedError("integral type %s not supported" % self.integral_type)
+
     def entity_ids(self):
-        """Generator function that returns the appropriate entity ids.
+        """Generator function that returns  entity ids.
 
         :arg self: self
         """
