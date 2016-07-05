@@ -55,9 +55,12 @@ def _tabulate(ufl_element, order, points, entity):
             for c, table in enumerate(reordered_table):
                 yield c, D, table
     except TraceError as TE:
-        import sys
-        shape = (q, phi)
-        gemTable = gem.Failure(shape, sys.exc_info())
+        # import sys
+        # shape = (q, phi)
+        # TODO: Incorporate a proper Failure Table into the tabulation manager.
+        # Currently we are returned appropriately sized zeros arrays for gradient
+        # tabulations on trace element.
+        # gemTable = gem.Failure(shape, sys.exc_info())
         for D, fiat_table in TE.zeros.iteritems():
             reordered_table = fiat_table.reshape(phi, C, q).transpose(1, 2, 0)  # (C, q, phi)
             for c, table in enumerate(reordered_table):
