@@ -1,14 +1,16 @@
-from __future__ import absolute_import, print_function, division
-from six import with_metaclass
-
 from abc import ABCMeta, abstractmethod
 
 from gem.utils import make_proxy_class
 
 
-class KernelInterface(with_metaclass(ABCMeta)):
+class KernelInterface(metaclass=ABCMeta):
     """Abstract interface for accessing the GEM expressions corresponding
     to kernel arguments."""
+
+    @abstractmethod
+    def coordinate(self, ufl_domain):
+        """A function that maps :class:`ufl.Domain`s to coordinate
+        :class:`ufl.Coefficient`s."""
 
     @abstractmethod
     def coefficient(self, ufl_coefficient, restriction):
