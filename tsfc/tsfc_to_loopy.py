@@ -1,7 +1,6 @@
 from __future__ import division, absolute_import, print_function
 
-from functools import partial
-from singledispatch import singledispatch
+from functools import partial, singledispatch
 import numpy as np
 import six
 
@@ -305,6 +304,8 @@ def map_index_sum(node, ctx):
 # }}}
 
 
+# {{{ utilities
+
 def count_subexpression_uses(node, expr_use_count):
     expr_use_count[node] = expr_use_count.get(node, 0) + 1
     for c in node.children:
@@ -322,6 +323,8 @@ def get_empty_assumptions_domain(domain):
             dim_type.param, i,
             dom_space.get_dim_name(dim_type.param, i))
     return isl.BasicSet.universe(assumptions_space)
+
+# }}}
 
 
 # {{{ main entrypoint

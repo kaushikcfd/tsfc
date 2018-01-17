@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function, division
-
 import numpy
 
 import coffee.base as coffee
@@ -23,8 +21,14 @@ class KernelBuilderBase(KernelInterface):
         self.prepare = []
         self.finalise = []
 
+        # Coordinates
+        self.domain_coordinate = {}
+
         # Coefficients
         self.coefficient_map = {}
+
+    def coordinate(self, domain):
+        return self.domain_coordinate[domain]
 
     def coefficient(self, ufl_coefficient, restriction):
         """A function that maps :class:`ufl.Coefficient`s to GEM

@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function, division
-from six.moves import range, zip
-
 import numpy
 import functools
 from itertools import chain, product
@@ -11,6 +8,8 @@ import gem
 from gem.optimise import remove_componenttensors as prune
 
 from finat import TensorFiniteElement
+
+import ufl
 
 from tsfc.kernel_interface.common import KernelBuilderBase
 from tsfc.finatinterface import create_element as _create_element
@@ -62,15 +61,17 @@ class KernelBuilder(KernelBuilderBase):
         self.apply_glue(prepare)
         return expressions
 
-    def set_coordinates(self, coefficient, mode=None):
+    def set_coordinates(self, domain):
         """Prepare the coordinate field.
 
-        :arg coefficient: :class:`ufl.Coefficient`
-        :arg mode: (ignored)
+        :arg domain: :class:`ufl.Domain`
         """
+        # Create a fake coordinate coefficient for a domain.
+        f = ufl.Coefficient(ufl.FunctionSpace(domain, domain.ufl_coordinate_element()))
+        self.domain_coordinate[domain] = f
         self.coordinates_args, expression = prepare_coordinates(
-            coefficient, "coordinate_dofs", interior_facet=self.interior_facet)
-        self.coefficient_map[coefficient] = expression
+            f, "coordinate_dofs", interior_facet=self.interior_facet)
+        self.coefficient_map[f] = expression
 
     def set_coefficients(self, integral_data, form_data):
         """Prepare the coefficients of the form.

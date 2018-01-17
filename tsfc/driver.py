@@ -1,7 +1,3 @@
-from __future__ import absolute_import, print_function, division
-from six import iterkeys, iteritems, viewitems
-from six.moves import range, zip
-
 import collections
 import operator
 import string
@@ -14,7 +10,7 @@ from numpy import asarray
 import ufl
 from ufl.algorithms import extract_arguments, extract_coefficients
 from ufl.algorithms.analysis import has_type
-from ufl.classes import Form, CellVolume
+from ufl.classes import Form, GeometricQuantity
 from ufl.log import GREEN
 from ufl.utils.sequences import max_degree
 
@@ -32,7 +28,6 @@ from tsfc.fiatinterface import as_fiat_cell
 from tsfc.logging import logger
 from tsfc.parameters import default_parameters
 
-from tsfc.kernel_interface import ProxyKernelInterface
 import tsfc.kernel_interface.firedrake as firedrake_interface
 
 
@@ -109,8 +104,7 @@ def compile_integral(integral_data, form_data, prefix, parameters,
                                   for arg in arguments)
     return_variables = builder.set_arguments(arguments, argument_multiindices)
 
-    coordinates = ufl_utils.coordinate_coefficient(mesh)
-    builder.set_coordinates(coordinates)
+    builder.set_coordinates(mesh)
 
     builder.set_coefficients(integral_data, form_data)
 
@@ -126,14 +120,12 @@ def compile_integral(integral_data, form_data, prefix, parameters,
 
     kernel_cfg = dict(interface=builder,
                       ufl_cell=cell,
+                      integral_type=integral_type,
                       precision=parameters["precision"],
                       integration_dim=integration_dim,
                       entity_ids=entity_ids,
                       argument_multiindices=argument_multiindices,
                       index_cache=index_cache)
-
-    kernel_cfg["facetarea"] = facetarea_generator(mesh, coordinates, kernel_cfg, integral_type)
-    kernel_cfg["cellvolume"] = cellvolume_generator(mesh, coordinates, kernel_cfg)
 
     mode_irs = collections.OrderedDict()
     for integral in integral_data.integrals:
@@ -145,8 +137,7 @@ def compile_integral(integral_data, form_data, prefix, parameters,
         mode = pick_mode(params["mode"])
         mode_irs.setdefault(mode, collections.OrderedDict())
 
-        integrand = ufl_utils.replace_coordinates(integral.integrand(), coordinates)
-        integrand = ufl.replace(integrand, form_data.function_replace_map)
+        integrand = ufl.replace(integral.integrand(), form_data.function_replace_map)
         integrand = ufl_utils.split_coefficients(integrand, builder.coefficient_split)
 
         # Check if the integral has a quad degree attached, otherwise use
@@ -157,7 +148,7 @@ def compile_integral(integral_data, form_data, prefix, parameters,
             quadrature_degree = params["quadrature_degree"]
         except KeyError:
             quadrature_degree = params["estimated_polynomial_degree"]
-            functions = list(arguments) + [coordinates] + list(integral_data.integral_coefficients)
+            functions = list(arguments) + [builder.coordinate(mesh)] + list(integral_data.integral_coefficients)
             function_degrees = [f.ufl_function_space().ufl_element().degree() for f in functions]
             if all((asarray(quadrature_degree) > 10 * asarray(degree)).all()
                    for degree in function_degrees):
@@ -191,8 +182,8 @@ def compile_integral(integral_data, form_data, prefix, parameters,
 
     # Finalise mode representations into a set of assignments
     assignments = []
-    for mode, var_reps in iteritems(mode_irs):
-        assignments.extend(mode.flatten(viewitems(var_reps), index_cache))
+    for mode, var_reps in mode_irs.items():
+        assignments.extend(mode.flatten(var_reps.items(), index_cache))
 
     if assignments:
         return_variables, expressions = zip(*assignments)
@@ -202,8 +193,8 @@ def compile_integral(integral_data, form_data, prefix, parameters,
 
     # Need optimised roots for COFFEE
     options = dict(reduce(operator.and_,
-                          [viewitems(mode.finalise_options)
-                           for mode in iterkeys(mode_irs)]))
+                          [mode.finalise_options.items()
+                           for mode in mode_irs.keys()]))
     expressions = impero_utils.preprocess_gem(expressions, **options)
     assignments = list(zip(return_variables, expressions))
 
@@ -251,50 +242,6 @@ def compile_integral(integral_data, form_data, prefix, parameters,
     return temp
 
 
-class CellVolumeKernelInterface(ProxyKernelInterface):
-    # Since CellVolume is evaluated as a cell integral, we must ensure
-    # that the right restriction is applied when it is used in an
-    # interior facet integral.  This proxy diverts coefficient
-    # translation to use a specified restriction.
-
-    def __init__(self, wrapee, restriction):
-        ProxyKernelInterface.__init__(self, wrapee)
-        self.restriction = restriction
-
-    def coefficient(self, ufl_coefficient, r):
-        assert r is None
-        return self._wrapee.coefficient(ufl_coefficient, self.restriction)
-
-
-def cellvolume_generator(domain, coordinate_coefficient, kernel_config):
-    def cellvolume(restriction):
-        from ufl import dx
-        integrand, degree = ufl_utils.one_times(dx(domain=domain))
-        integrand = ufl_utils.replace_coordinates(integrand, coordinate_coefficient)
-        interface = CellVolumeKernelInterface(kernel_config["interface"], restriction)
-
-        config = {k: v for k, v in kernel_config.items()
-                  if k in ["ufl_cell", "precision", "index_cache"]}
-        config.update(interface=interface, quadrature_degree=degree)
-        expr, = fem.compile_ufl(integrand, point_sum=True, **config)
-        return expr
-    return cellvolume
-
-
-def facetarea_generator(domain, coordinate_coefficient, kernel_config, integral_type):
-    def facetarea():
-        from ufl import Measure
-        assert integral_type != 'cell'
-        integrand, degree = ufl_utils.one_times(Measure(integral_type, domain=domain))
-        integrand = ufl_utils.replace_coordinates(integrand, coordinate_coefficient)
-
-        config = kernel_config.copy()
-        config.update(quadrature_degree=degree)
-        expr, = fem.compile_ufl(integrand, point_sum=True, **config)
-        return expr
-    return facetarea
-
-
 def compile_expression_at_points(expression, points, coordinates, parameters=None):
     """Compiles a UFL expression to be evaluated at compile-time known
     reference points.  Useful for interpolating UFL expressions onto
@@ -321,19 +268,19 @@ def compile_expression_at_points(expression, points, coordinates, parameters=Non
     # Apply UFL preprocessing
     expression = ufl_utils.preprocess_expression(expression)
 
+    # Initialise kernel builder
+    builder = firedrake_interface.ExpressionKernelBuilder()
+
     # Replace coordinates (if any)
     domain = expression.ufl_domain()
     if domain:
         assert coordinates.ufl_domain() == domain
-        expression = ufl_utils.replace_coordinates(expression, coordinates)
+        builder.domain_coordinate[domain] = coordinates
 
     # Collect required coefficients
     coefficients = extract_coefficients(expression)
-    if coordinates not in coefficients and has_type(expression, CellVolume):
+    if has_type(expression, GeometricQuantity):
         coefficients = [coordinates] + coefficients
-
-    # Initialise kernel builder
-    builder = firedrake_interface.ExpressionKernelBuilder()
     builder.set_coefficients(coefficients)
 
     # Split mixed coefficients
@@ -345,7 +292,6 @@ def compile_expression_at_points(expression, points, coordinates, parameters=Non
                   ufl_cell=coordinates.ufl_domain().ufl_cell(),
                   precision=parameters["precision"],
                   point_set=point_set)
-    config["cellvolume"] = cellvolume_generator(coordinates.ufl_domain(), coordinates, config)
     ir, = fem.compile_ufl(expression, point_sum=False, **config)
 
     # Deal with non-scalar expressions
@@ -418,6 +364,16 @@ def lower_integral_type(fiat_cell, integral_type):
 
 def pick_mode(mode):
     "Return one of the specialized optimisation modules from a mode string."
+    try:
+        from firedrake_citations import Citations
+        cites = {"vanilla": ("Homolya2017", ),
+                 "coffee": ("Luporini2016", "Homolya2017", ),
+                 "spectral": ("Luporini2016", "Homolya2017", "Homolya2017a"),
+                 "tensor": ("Kirby2006", "Homolya2017", )}
+        for c in cites[mode]:
+            Citations().register(c)
+    except ImportError:
+        pass
     if mode == "vanilla":
         import tsfc.vanilla as m
     elif mode == "coffee":
