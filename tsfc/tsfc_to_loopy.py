@@ -330,7 +330,7 @@ def get_empty_assumptions_domain(domain):
 # {{{ main entrypoint
 
 def tsfc_to_loopy(ir, argument_ordering, kernel_name="tsfc_kernel",
-        generate_increments=False):
+                  generate_increments=False):
     new_argument_ordering = []
     for idx in argument_ordering:
         if idx not in new_argument_ordering:
