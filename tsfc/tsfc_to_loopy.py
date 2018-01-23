@@ -71,19 +71,10 @@ class ConversionContext(object):
         return iname
 
     def _is_cse_eligible(self, node):
-        if not (isinstance(node, g.Literal) and node.array.shape == ()):
-
-            if isinstance(node, (g.FlexiblyIndexed, g.Indexed)):
-                return False
-            else:
-                return True
-        else:
+        if (isinstance(node, g.Literal) and node.array.shape == ()):
             return False
-
-        return not (
-            (isinstance(node, g.Literal) and node.array.shape == ()) or
-
-            not isinstance(node, g.FlexiblyIndexed))
+        else:
+            return not isinstance(node, (g.FlexiblyIndexed, g.Indexed))
 
     def rec_gem(self, node, parent):
         if (
@@ -263,6 +254,9 @@ def map_flexibly_indexed(node, ctx):
         return result
 
     if c.shape == (None, ):
+        # This is the case when the the variable is a constant in the form.
+        # The tsfc kernel gives it as a FlexiblyIndexedVariable with shape
+        # `(None,)`.
         return p.Variable(index_aggregate_to_name(c, ctx))
 
     return p.Subscript(
@@ -330,7 +324,7 @@ def get_empty_assumptions_domain(domain):
 # {{{ main entrypoint
 
 def tsfc_to_loopy(ir, argument_ordering, kernel_name="tsfc_kernel",
-                  generate_increments=False):
+                  generate_increments=False, in_place_cse_dupl=False):
     new_argument_ordering = []
     for idx in argument_ordering:
         if idx not in new_argument_ordering:
@@ -459,12 +453,11 @@ def tsfc_to_loopy(ir, argument_ordering, kernel_name="tsfc_kernel",
     # FIXME: Dealing with the Island problem
     # Commenting(and not deleting) it as it maybe used for temporary
     # compilation. A long term solution is in process
-    '''
-    for insn_id, cse_assignment in enumerate(ctx.assignments):
-        var_name, free_indices, _ = cse_assignment
-        for iname in free_indices:
-            knl = lp.duplicate_inames(knl, iname, "writes:"+var_name)
-    '''
+    if in_place_cse_dupl:
+        for insn_id, cse_assignment in enumerate(ctx.assignments):
+            var_name, free_indices, _ = cse_assignment
+            for iname in free_indices:
+                knl = lp.duplicate_inames(knl, iname, "writes:"+var_name)
 
     return knl
 
