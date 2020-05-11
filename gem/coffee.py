@@ -33,7 +33,8 @@ def monomial_sum_to_expression(monomial_sum):
     for _, monomials in groups:
         sum_indices = monomials[0].sum_indices
         products = [make_product(monomial.atomics + (monomial.rest,)) for monomial in monomials]
-        indexsums.append(IndexSum(make_sum(products), sum_indices))
+        indexsums.append(IndexSum(make_sum(products), sum_indices,
+            tags=frozenset(['cofee.monomial_sum_to_expression'])))
     return make_sum(indexsums)
 
 

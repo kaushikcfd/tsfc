@@ -138,6 +138,8 @@ class CoordinateMapping(PhysicalGeometry):
         return self.interface.cell_size(self.mt.restriction)
 
     def jacobian_at(self, point):
+        import pudb; pu.db
+         #FIXME: We might need to do something here..
         expr = Jacobian(self.mt.terminal.ufl_domain())
         if self.mt.restriction == '+':
             expr = PositiveRestricted(expr)
@@ -203,7 +205,8 @@ class PointSetContext(ContextBase):
     @cached_property
     def quadrature_rule(self):
         integration_cell = self.fiat_cell.construct_subelement(self.integration_dim)
-        return make_quadrature(integration_cell, self.quadrature_degree)
+        rule = make_quadrature(integration_cell, self.quadrature_degree)
+        return rule
 
     @cached_property
     def point_set(self):
@@ -614,6 +617,7 @@ def translate_coefficient(terminal, mt, ctx):
             value = gem.IndexSum(gem.Product(expr, var), indices)
             summands.append(gem.optimise.contraction(value))
         optimised_value = gem.optimise.make_sum(summands)
+        optimised_value.add_tag('tsfc.coeff_evaluation')
         value_dict[alpha] = gem.ComponentTensor(optimised_value, zeta)
 
     # Change from FIAT to UFL arrangement
@@ -643,6 +647,9 @@ def compile_ufl(expression, interior_facet=False, point_sum=False, **kwargs):
 
     # Translate UFL to GEM, lowering finite element specific nodes
     result = map_expr_dags(context.translator, expressions)
+
+
     if point_sum:
         result = [gem.index_sum(expr, context.point_indices) for expr in result]
+    print('Yo.... I am done converting everythin to GEM')
     return result

@@ -179,10 +179,10 @@ class Identity(Constant):
 class Literal(Constant):
     """Tensor-valued constant"""
 
-    __slots__ = ('array',)
-    __front__ = ('array',)
+    __slots__ = ('array', 'tags')
+    __front__ = ('array', 'tags')
 
-    def __new__(cls, array):
+    def __new__(cls, array, tags=frozenset()):
         array = asarray(array)
         if (array == 0).all():
             # All zeros, make symbolic zero
@@ -190,11 +190,13 @@ class Literal(Constant):
         else:
             return super(Literal, cls).__new__(cls)
 
-    def __init__(self, array):
+    def __init__(self, array, tags=frozenset()):
         try:
             self.array = asarray(array, dtype=float)
         except TypeError:
             self.array = asarray(array, dtype=complex)
+
+        self.tags = tags
 
     def is_equal(self, other):
         if type(self) != type(other):
@@ -221,12 +223,13 @@ class Literal(Constant):
 class Variable(Terminal):
     """Symbolic variable tensor"""
 
-    __slots__ = ('name', 'shape')
-    __front__ = ('name', 'shape')
+    __slots__ = ('name', 'shape', 'tags')
+    __front__ = ('name', 'shape', 'tags')
 
-    def __init__(self, name, shape):
+    def __init__(self, name, shape, tags=frozenset()):
         self.name = name
         self.shape = shape
+        self.tags = tags
 
 
 class Sum(Scalar):
@@ -436,13 +439,14 @@ class Index(IndexBase):
     # Not true object count, just for naming purposes
     _count = 0
 
-    __slots__ = ('name', 'extent', 'count')
+    __slots__ = ('name', 'extent', 'count', 'tags')
 
-    def __init__(self, name=None, extent=None):
+    def __init__(self, name=None, extent=None, tags=frozenset()):
         self.name = name
         Index._count += 1
         self.count = Index._count
         self.extent = extent
+        self.tags = tags
 
     def set_extent(self, value):
         # Set extent, check for consistency
@@ -450,6 +454,9 @@ class Index(IndexBase):
             self.extent = value
         elif self.extent != value:
             raise ValueError("Inconsistent index extents!")
+
+    def add_tag(self, tag):
+        self.tags = self.tags | frozenset([tag])
 
     def __str__(self):
         if self.name is None:
@@ -644,10 +651,10 @@ class ComponentTensor(Node):
 
 
 class IndexSum(Scalar):
-    __slots__ = ('children', 'multiindex')
+    __slots__ = ('children', 'multiindex', 'tags')
     __back__ = ('multiindex',)
 
-    def __new__(cls, summand, multiindex):
+    def __new__(cls, summand, multiindex, tags=frozenset()):
         # Sum zeros
         assert not summand.shape
         if isinstance(summand, Zero):
@@ -674,8 +681,15 @@ class IndexSum(Scalar):
         # Collect shape and free indices
         assert set(multiindex) <= set(summand.free_indices)
         self.free_indices = unique(set(summand.free_indices) - set(multiindex))
+        self.tags = tags
+
+        print('gem/gem.py::686 --', id(self))
 
         return self
+
+    def add_tag(self, tag):
+        assert isinstance(tag, str)
+        self.tags = self.tags | frozenset([tag])
 
 
 class ListTensor(Node):

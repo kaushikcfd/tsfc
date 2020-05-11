@@ -112,7 +112,9 @@ def flatten(var_reps, index_cache):
         # for getting smaller temporaries.
         sum_indices = sorted(sum_indices, key=lambda index: index.extent)
         # Apply sum factorisation combined with COFFEE technology
+        print('Sum factorize starts here...')
         expression = sum_factorise(variable, sum_indices, monomial_sum)
+        print('Sum factorize ends here...')
         yield (variable, expression)
 
 

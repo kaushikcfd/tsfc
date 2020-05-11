@@ -202,21 +202,31 @@ def compile_integral(integral_data, form_data, prefix, parameters, interface, co
 
         quadrature_multiindex = quad_rule.point_set.indices
         quadrature_indices.extend(quadrature_multiindex)
+        for quad_idx in quadrature_indices:
+            quad_idx.add_tag('tsfc.quad_index')
 
         config = kernel_cfg.copy()
         config.update(quadrature_rule=quad_rule)
         expressions = fem.compile_ufl(integrand,
                                       interior_facet=interior_facet,
                                       **config)
+        print('I very well hope, optimization starts after here....')
         reps = mode.Integrals(expressions, quadrature_multiindex,
                               argument_multiindices, params)
+        print('This is where an "Integral" object is created.')
         for var, rep in zip(return_variables, reps):
             mode_irs[mode].setdefault(var, []).append(rep)
+    print('This is where the stupid (?) loop ends.')
+
+
 
     # Finalise mode representations into a set of assignments
     assignments = []
+
+    print('[PING]')
     for mode, var_reps in mode_irs.items():
         assignments.extend(mode.flatten(var_reps.items(), index_cache))
+    print('[PONG]')
 
     if assignments:
         return_variables, expressions = zip(*assignments)
@@ -228,7 +238,10 @@ def compile_integral(integral_data, form_data, prefix, parameters, interface, co
     options = dict(reduce(operator.and_,
                           [mode.finalise_options.items()
                            for mode in mode_irs.keys()]))
+    print('Probably this is where optimization starts')
+    print('Options:', options)
     expressions = impero_utils.preprocess_gem(expressions, **options)
+    print('optimization ends here I guess...')
     assignments = list(zip(return_variables, expressions))
 
     # Let the kernel interface inspect the optimised IR to register

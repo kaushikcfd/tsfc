@@ -2,6 +2,7 @@
 
 import collections
 import ufl
+from ufl.classes import ReferenceGrad
 
 from gem import (Literal, Zero, Identity, Sum, Product, Division,
                  Power, MathFunction, MinValue, MaxValue, Comparison,

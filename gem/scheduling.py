@@ -128,6 +128,9 @@ def handle(ops, push, decref, node):
     elif isinstance(node, impero.Initialise):
         ops.append(node)
     elif isinstance(node, impero.Accumulate):
+        # Idhar pudb import karke gaand maraane bol issey..
+        # FIXME: Kya bakchodi hai yeh..??
+        # FIXME: Over here transfer the tags.
         ops.append(node)
         push(impero.Initialise(node.indexsum))
         decref(node.indexsum.children[0])

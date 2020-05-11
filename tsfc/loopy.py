@@ -195,14 +195,16 @@ def statement_for(tree, ctx):
 
 @statement.register(imp.Initialise)
 def statement_initialise(leaf, ctx):
-    return [lp.Assignment(expression(leaf.indexsum, ctx), 0.0, within_inames=ctx.active_inames())]
+    return [lp.Assignment(expression(leaf.indexsum, ctx), 0.0,
+        within_inames=ctx.active_inames(), tags=leaf.tags)]
 
 
 @statement.register(imp.Accumulate)
 def statement_accumulate(leaf, ctx):
     lhs = expression(leaf.indexsum, ctx)
     rhs = lhs + expression(leaf.indexsum.children[0], ctx)
-    return [lp.Assignment(lhs, rhs, within_inames=ctx.active_inames())]
+    return [lp.Assignment(lhs, rhs, within_inames=ctx.active_inames(),
+        tags=leaf.tags)]
 
 
 @statement.register(imp.Return)
@@ -216,7 +218,8 @@ def statement_return(leaf, ctx):
 def statement_returnaccumulate(leaf, ctx):
     lhs = expression(leaf.variable, ctx)
     rhs = lhs + expression(leaf.indexsum.children[0], ctx)
-    return [lp.Assignment(lhs, rhs, within_inames=ctx.active_inames())]
+    return [lp.Assignment(lhs, rhs, within_inames=ctx.active_inames(),
+        tags=leaf.tags)]
 
 
 @statement.register(imp.Evaluate)

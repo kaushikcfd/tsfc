@@ -55,11 +55,14 @@ class Evaluate(Terminal):
 class Initialise(Terminal):
     """Initialise an :class:`gem.IndexSum`."""
 
-    __slots__ = ('indexsum',)
-    __front__ = ('indexsum',)
+    __slots__ = ('indexsum', 'tags')
+    __front__ = ('indexsum', 'tags')
 
-    def __init__(self, indexsum):
+    def __init__(self, indexsum, tags=None):
         self.indexsum = indexsum
+        if tags is None:
+            tags = indexsum.tags | frozenset(['impero.init'])
+        self.tags = tags
 
     def loop_shape(self, free_indices):
         return free_indices(self.indexsum)
@@ -68,11 +71,15 @@ class Initialise(Terminal):
 class Accumulate(Terminal):
     """Accumulate terms into an :class:`gem.IndexSum`."""
 
-    __slots__ = ('indexsum',)
-    __front__ = ('indexsum',)
+    __slots__ = ('indexsum', 'tags')
+    __front__ = ('indexsum', 'tags')
 
-    def __init__(self, indexsum):
+    def __init__(self, indexsum, tags=None):
         self.indexsum = indexsum
+        if tags is None:
+            tags = indexsum.tags | frozenset(['impero.accumulate'])
+        self.tags = tags
+        print('gem/impero.py::082 --', id(indexsum))
 
     def loop_shape(self, free_indices):
         return free_indices(self.indexsum.children[0])
@@ -96,8 +103,8 @@ class Return(Terminal):
     """Save value of GEM expression into an lvalue. Used to "return"
     values from a kernel."""
 
-    __slots__ = ('variable', 'expression')
-    __front__ = ('variable', 'expression')
+    __slots__ = ('variable', 'expression',)
+    __front__ = ('variable', 'expression',)
 
     def __init__(self, variable, expression):
         assert set(variable.free_indices) >= set(expression.free_indices)
@@ -113,14 +120,20 @@ class ReturnAccumulate(Terminal):
     """Accumulate an :class:`gem.IndexSum` directly into a return
     variable."""
 
-    __slots__ = ('variable', 'indexsum')
-    __front__ = ('variable', 'indexsum')
+    __slots__ = ('variable', 'indexsum', 'tags')
+    __front__ = ('variable', 'indexsum', 'tags')
 
-    def __init__(self, variable, indexsum):
+    def __init__(self, variable, indexsum, tags=None):
         assert set(variable.free_indices) == set(indexsum.free_indices)
 
         self.variable = variable
         self.indexsum = indexsum
+
+        print('gem/impero.py::132 --', id(indexsum))
+
+        if tags is None:
+            tags = indexsum.tags | frozenset(['impero.ret_accumulate'])
+        self.tags = tags
 
     def loop_shape(self, free_indices):
         return free_indices(self.indexsum.children[0])

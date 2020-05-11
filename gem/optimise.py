@@ -39,7 +39,8 @@ def literal_rounding_literal(node, self):
     # mimics FFC formatting.
     one_decimal = numpy.asarray(numpy.round(table, 1))
     one_decimal[numpy.logical_not(one_decimal)] = 0  # no minus zeros
-    return Literal(numpy.where(abs(table - one_decimal) < epsilon, one_decimal, table))
+    return Literal(numpy.where(abs(table - one_decimal) < epsilon, one_decimal,
+        table), tags=node.tags)
 
 
 def ffc_rounding(expression, epsilon):

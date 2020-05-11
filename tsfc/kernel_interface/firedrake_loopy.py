@@ -76,11 +76,12 @@ class KernelBuilderBase(_KernelBuilderBase):
                                        gem.Indexed(cell_orientations, (1,)))
         else:
             shape = (1,)
-            cell_orientations = gem.Variable("cell_orientations", shape)
+            cell_orientations = gem.Variable("cell_orientations", shape,
+                    frozenset(['tsfc.cell_orientations']))
             self._cell_orientations = (gem.Indexed(cell_orientations, (0,)),)
         self.cell_orientations_loopy_arg = lp.GlobalArg("cell_orientations", dtype=numpy.int32, shape=shape)
 
-    def _coefficient(self, coefficient, name):
+    def _coefficient(self, coefficient, name, tags=frozenset()):
         """Prepare a coefficient. Adds glue code for the coefficient
         and adds the coefficient to the coefficient map.
 
@@ -88,7 +89,8 @@ class KernelBuilderBase(_KernelBuilderBase):
         :arg name: coefficient name
         :returns: loopy argument for the coefficient
         """
-        funarg, expression = prepare_coefficient(coefficient, name, self.scalar_type, interior_facet=self.interior_facet)
+        funarg, expression = prepare_coefficient(coefficient, name,
+                self.scalar_type, interior_facet=self.interior_facet, tags=tags)
         self.coefficient_map[coefficient] = expression
         return funarg
 
@@ -103,7 +105,9 @@ class KernelBuilderBase(_KernelBuilderBase):
         in P1).
         """
         f = Coefficient(FunctionSpace(domain, FiniteElement("P", domain.ufl_cell(), 1)))
-        funarg, expression = prepare_coefficient(f, "cell_sizes", self.scalar_type, interior_facet=self.interior_facet)
+        funarg, expression = prepare_coefficient(f, "cell_sizes",
+                self.scalar_type, interior_facet=self.interior_facet,
+                tags=frozenset(["tsfc.cell_sizes"]))
         self.cell_sizes_arg = funarg
         self._cell_sizes = expression
 
@@ -220,7 +224,8 @@ class KernelBuilder(KernelBuilderBase):
         # Create a fake coordinate coefficient for a domain.
         f = Coefficient(FunctionSpace(domain, domain.ufl_coordinate_element()))
         self.domain_coordinate[domain] = f
-        self.coordinates_arg = self._coefficient(f, "coords")
+        self.coordinates_arg = self._coefficient(f, "coords",
+                tags=frozenset(["tsfc.coords"]))
 
     def set_coefficients(self, integral_data, form_data):
         """Prepare the coefficients of the form.
@@ -253,8 +258,10 @@ class KernelBuilder(KernelBuilderBase):
                 # coefficients, but each integral only requires one.
                 coefficient_numbers.append(form_data.original_coefficient_positions[i])
         for i, coefficient in enumerate(coefficients):
+            # TODO: Would it be accurate to tag these `tsfc.input_dof`?
             self.coefficient_args.append(
-                self._coefficient(coefficient, "w_%d" % i))
+                self._coefficient(coefficient, "w_%d" % i,
+                    tags=frozenset(["tsfc.coefficient"])))
         self.kernel.coefficient_numbers = tuple(coefficient_numbers)
 
     def register_requirements(self, ir):
@@ -305,7 +312,8 @@ class KernelBuilder(KernelBuilderBase):
         return None
 
 
-def prepare_coefficient(coefficient, name, scalar_type, interior_facet=False):
+def prepare_coefficient(coefficient, name, scalar_type, interior_facet=False,
+        tags=frozenset()):
     """Bridges the kernel interface and the GEM abstraction for
     Coefficients.
 
@@ -322,7 +330,7 @@ def prepare_coefficient(coefficient, name, scalar_type, interior_facet=False):
     if coefficient.ufl_element().family() == 'Real':
         # Constant
         funarg = lp.GlobalArg(name, dtype=scalar_type, shape=(coefficient.ufl_element().value_size(),))
-        expression = gem.reshape(gem.Variable(name, (None,)),
+        expression = gem.reshape(gem.Variable(name, (None,), tags=tags),
                                  coefficient.ufl_shape)
 
         return funarg, expression
@@ -333,9 +341,9 @@ def prepare_coefficient(coefficient, name, scalar_type, interior_facet=False):
     size = numpy.prod(shape, dtype=int)
 
     if not interior_facet:
-        expression = gem.reshape(gem.Variable(name, (size,)), shape)
+        expression = gem.reshape(gem.Variable(name, (size,), tags=tags), shape)
     else:
-        varexp = gem.Variable(name, (2*size,))
+        varexp = gem.Variable(name, (2*size,), tags=tags)
         plus = gem.view(varexp, slice(size))
         minus = gem.view(varexp, slice(size, 2*size))
         expression = (gem.reshape(plus, shape), gem.reshape(minus, shape))
@@ -398,6 +406,7 @@ def prepare_arguments(arguments, multiindices, scalar_type, interior_facet=False
         slicez = [[slice(s) for s in u_shape]]
 
     funarg = lp.GlobalArg("A", dtype=scalar_type, shape=c_shape)
-    varexp = gem.Variable("A", c_shape)
+    # FIXME: Assuming this is correct.
+    varexp = gem.Variable("A", c_shape, tags=frozenset(["tsfc.output_dof"]))
     expressions = [expression(gem.view(varexp, *slices)) for slices in slicez]
     return funarg, prune(expressions)
